@@ -18,29 +18,24 @@ export default function Dashboard({
     adminToken: string;
   }>;
 }) {
-  const { adminToken } =
-    use(params);
+  const { adminToken } = use(params);
 
-  const [data, setData] =
-    useState<any>(null);
+  const [data, setData] = useState<any>(null);
+  const [viewer, setViewer] = useState<any>(null);
+  const [now, setNow] = useState(Date.now());
 
-  const [viewer, setViewer] =
-    useState<any>(null);
-
-  const [now, setNow] =
-    useState(Date.now());
+  const [address, setAddress] =
+    useState("Waiting for location...");
 
   async function refresh() {
-    const response =
-      await fetch(
-        `/api/dashboard/${adminToken}`,
-        {
-          cache: "no-store"
-        }
-      );
+    const response = await fetch(
+      `/api/dashboard/${adminToken}`,
+      {
+        cache: "no-store"
+      }
+    );
 
-    const json =
-      await response.json();
+    const json = await response.json();
 
     if (response.ok) {
       setData(json);
@@ -50,18 +45,15 @@ export default function Dashboard({
   useEffect(() => {
     refresh();
 
-    const poll =
-      setInterval(
-        refresh,
-        5000
-      );
+    const poll = setInterval(
+      refresh,
+      5000
+    );
 
-    const clock =
-      setInterval(
-        () =>
-          setNow(Date.now()),
-        1000
-      );
+    const clock = setInterval(
+      () => setNow(Date.now()),
+      1000
+    );
 
     return () => {
       clearInterval(poll);
@@ -83,6 +75,42 @@ export default function Dashboard({
         }
       );
   }, []);
+
+  useEffect(() => {
+    if (!data?.latest) {
+      return;
+    }
+
+    const lat =
+      data.latest.latitude;
+
+    const lon =
+      data.latest.longitude;
+
+    fetch(
+      `/api/reverse-geocode?lat=${lat}&lon=${lon}`
+    )
+      .then(
+        async (response) => {
+          const json =
+            await response.json();
+
+          setAddress(
+            json.address ||
+              "Address unavailable"
+          );
+        }
+      )
+      .catch(() => {
+        setAddress(
+          "Address unavailable"
+        );
+      });
+
+  }, [
+    data?.latest?.latitude,
+    data?.latest?.longitude
+  ]);
 
   const status =
     useMemo(() => {
@@ -187,7 +215,9 @@ export default function Dashboard({
 
   return (
     <main className="dashboard">
+
       <div className="topbar">
+
         <div>
           <h1>
             {data?.name ||
@@ -211,11 +241,16 @@ export default function Dashboard({
         <div className="muted">
           Updates every 5 seconds
         </div>
+
       </div>
 
       <div className="grid">
+
         <section className="panel">
-          <h2>Position</h2>
+
+          <h2>
+            Position
+          </h2>
 
           {mapUrl ? (
             <iframe
@@ -235,14 +270,31 @@ export default function Dashboard({
               Waiting for location...
             </div>
           )}
+
         </section>
 
         <section className="panel">
-          <h2>Location Details</h2>
+
+          <h2>
+            Location Details
+          </h2>
 
           <div className="stats">
+
             <div className="stat">
-              <b>Distance</b>
+              <b>
+                Exact Address
+              </b>
+
+              <strong>
+                {address}
+              </strong>
+            </div>
+
+            <div className="stat">
+              <b>
+                Distance
+              </b>
 
               <strong>
                 {distance === null
@@ -256,7 +308,9 @@ export default function Dashboard({
             </div>
 
             <div className="stat">
-              <b>Speed</b>
+              <b>
+                Speed
+              </b>
 
               <strong>
                 {speedKmh === null
@@ -268,7 +322,9 @@ export default function Dashboard({
             </div>
 
             <div className="stat">
-              <b>Accuracy</b>
+              <b>
+                Accuracy
+              </b>
 
               <strong>
                 {accuracy === null
@@ -278,7 +334,9 @@ export default function Dashboard({
             </div>
 
             <div className="stat">
-              <b>Coordinates</b>
+              <b>
+                Coordinates
+              </b>
 
               <strong>
                 {data?.latest
@@ -292,7 +350,9 @@ export default function Dashboard({
             </div>
 
             <div className="stat">
-              <b>Last Updated</b>
+              <b>
+                Last Updated
+              </b>
 
               <strong>
                 {data?.latest
@@ -304,23 +364,28 @@ export default function Dashboard({
             </div>
 
             <div className="stat">
-              <b>Status</b>
+              <b>
+                Status
+              </b>
 
               <strong>
                 {status}
               </strong>
             </div>
+
           </div>
 
           <div className="notice">
             If the tracked phone is switched off,
-            loses internet, or stops sending
-            updates, this dashboard will show
-            only the last successfully received
-            location.
+            loses internet, or stops sending updates,
+            the dashboard shows only the last
+            successfully received location.
           </div>
+
         </section>
+
       </div>
+
     </main>
   );
 }
