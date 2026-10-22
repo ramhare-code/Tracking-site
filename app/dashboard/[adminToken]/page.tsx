@@ -9,7 +9,7 @@ import {
 
 import {
   haversineKm
-} from "@/lib/geo";
+} from "../../../lib/geo";
 
 export default function Dashboard({
   params
