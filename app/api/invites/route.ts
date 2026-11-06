@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import crypto from "crypto";
 import { getSupabaseAdmin } from "../../../lib/supabaseAdmin";
+import { inviteMessageText, sendInvite } from "../../../lib/notify";
 
 function createToken(bytes = 24) {
   return crypto.randomBytes(bytes).toString("base64url");
@@ -55,9 +56,19 @@ export async function POST(request: Request) {
     const dashboardUrl =
       `${baseUrl}/dashboard/${adminToken}`;
 
+    // Automatically deliver the permission link to the recipient.
+    const delivery = await sendInvite({
+      name,
+      phone,
+      email,
+      inviteUrl
+    });
+
     return NextResponse.json({
       inviteUrl,
-      dashboardUrl
+      dashboardUrl,
+      delivery,
+      shareText: inviteMessageText(name, inviteUrl)
     });
 
   } catch (error) {

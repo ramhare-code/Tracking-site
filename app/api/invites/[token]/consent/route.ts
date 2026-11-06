@@ -51,6 +51,7 @@ export async function POST(
       .maybeSingle();
 
     if (error || !data) {
+      if (error) console.error(error);
       return NextResponse.json(
         {
           error: "Invitation not found."

@@ -31,6 +31,13 @@ export async function POST(
         ? null
         : Number(body.heading);
 
+    const capturedMs = Number(body.timestamp);
+    const capturedAt =
+      Number.isFinite(capturedMs) &&
+      Math.abs(Date.now() - capturedMs) < 10 * 60 * 1000
+        ? new Date(capturedMs).toISOString()
+        : new Date().toISOString();
+
     if (
       !Number.isFinite(latitude) ||
       !Number.isFinite(longitude) ||
@@ -56,7 +63,7 @@ export async function POST(
       error: inviteError
     } = await supabase
       .from("tracking_invites")
-      .select("id,status,expires_at")
+      .select("id,status")
       .eq("share_token", token)
       .maybeSingle();
 
@@ -67,20 +74,6 @@ export async function POST(
         },
         {
           status: 404
-        }
-      );
-    }
-
-    if (
-      new Date(invite.expires_at).getTime() <
-      Date.now()
-    ) {
-      return NextResponse.json(
-        {
-          error: "Invitation expired."
-        },
-        {
-          status: 410
         }
       );
     }
@@ -113,7 +106,8 @@ export async function POST(
         heading:
           Number.isFinite(heading)
             ? heading
-            : null
+            : null,
+        captured_at: capturedAt
       });
 
     if (error) {

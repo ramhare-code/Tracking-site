@@ -32,8 +32,9 @@ export async function GET(
     }
 
     if (
+      data.status === "pending" &&
       new Date(data.expires_at).getTime() <
-      Date.now()
+        Date.now()
     ) {
       return NextResponse.json(
         {

@@ -30,7 +30,9 @@ export async function GET(
     );
   }
 
-  const { data: latest } = await supabase
+  // Recent points: used for the movement trail and to
+  // calculate speed when the phone does not report it.
+  const { data: recent } = await supabase
     .from("location_updates")
     .select(
       "latitude,longitude,accuracy_m,speed_mps,heading,captured_at"
@@ -39,13 +41,23 @@ export async function GET(
     .order("captured_at", {
       ascending: false
     })
-    .limit(1)
-    .maybeSingle();
+    .limit(300);
 
-  return NextResponse.json({
-    name: invite.name,
-    consentStatus: invite.status,
-    expiresAt: invite.expires_at,
-    latest: latest || null
-  });
+  const points = recent || [];
+
+  return NextResponse.json(
+    {
+      name: invite.name,
+      consentStatus: invite.status,
+      expiresAt: invite.expires_at,
+      serverTime: new Date().toISOString(),
+      latest: points[0] || null,
+      recent: points
+    },
+    {
+      headers: {
+        "Cache-Control": "no-store"
+      }
+    }
+  );
 }
