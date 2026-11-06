@@ -317,10 +317,20 @@ export default function SharePage({
             <b>Your permission is required</b>
 
             <p>
-              If you press Agree, your browser will ask whether this
-              website may access your location. Your permission is
+              <b>
+                Once you approve, your location will always be shown
+                on the requester&apos;s live map
+              </b>{" "}
+              — updated every second while this page is open, and the
+              last known location at other times — until you press
+              Stop Sharing.
+            </p>
+
+            <p>
+              After you press Agree, your browser will ask whether this
+              website may access your location. Your approval is
               remembered: whenever you open this link again, sharing
-              resumes automatically until you press Stop Sharing.
+              resumes automatically without asking again.
             </p>
           </div>
         )}
@@ -348,6 +358,13 @@ export default function SharePage({
           >
             Start Sharing
           </button>
+        )}
+
+        {agreed && (
+          <div className="consent">
+            Your location is always shown to the requester until you
+            press Stop Sharing.
+          </div>
         )}
 
         {sharing && (

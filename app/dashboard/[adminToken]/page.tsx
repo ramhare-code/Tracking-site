@@ -1,7 +1,5 @@
 "use client";
 
-import "leaflet/dist/leaflet.css";
-
 import {
   use,
   useEffect,
@@ -18,16 +16,12 @@ import {
   pathLengthKm
 } from "../../../lib/geo";
 
+import LiveMap, { RouteInfo, Viewer } from "./LiveMap";
+
 // How often the dashboard asks the server for the newest location.
 const POLL_MS = 1000;
 // A location newer than this counts as "Live".
 const LIVE_WINDOW_MS = 15000;
-
-type Viewer = {
-  lat: number;
-  lon: number;
-  accuracy: number;
-};
 
 export default function Dashboard({
   params
@@ -45,6 +39,7 @@ export default function Dashboard({
 
   const [viewer, setViewer] = useState<Viewer | null>(null);
   const [viewerError, setViewerError] = useState("");
+  const [route, setRoute] = useState<RouteInfo | null>(null);
 
   const [address, setAddress] = useState("Waiting for location...");
   const lastGeocode = useRef<{ lat: number; lon: number; at: number } | null>(
@@ -242,7 +237,42 @@ export default function Dashboard({
         <section className="panel">
           <h2>Position</h2>
 
-          <LiveMap points={points} viewer={viewer} />
+          <LiveMap
+            points={points}
+            viewer={viewer}
+            name={data?.name || ""}
+            live={status === "Live"}
+            onRoute={setRoute}
+          />
+
+          {latest && (
+            <div className="ride-card">
+              <div className="ride-avatar">
+                {(data?.name || "?").trim().charAt(0).toUpperCase()}
+              </div>
+              <div className="ride-main">
+                <b>{data?.name}</b>
+                <span className="muted">
+                  {status === "Live" ? "Moving live" : status} •{" "}
+                  {ageMs !== null ? formatAge(ageMs) : ""}
+                </span>
+              </div>
+              <div className="ride-metric">
+                <strong>
+                  {route
+                    ? formatEta(route.durationMin)
+                    : distanceKm !== null
+                    ? formatDistance(distanceKm)
+                    : "—"}
+                </strong>
+                <span>{route ? `${formatDistance(route.distanceKm)} by road` : "away"}</span>
+              </div>
+              <div className="ride-metric">
+                <strong>{speedKmh === null ? "—" : speedKmh.toFixed(0)}</strong>
+                <span>km/h</span>
+              </div>
+            </div>
+          )}
         </section>
 
         <section className="panel">
@@ -271,6 +301,15 @@ export default function Dashboard({
                     ? "Calculating..."
                     : "—"
                   : `${speedKmh.toFixed(1)} km/h`}
+              </strong>
+            </div>
+
+            <div className="stat">
+              <b>By road / ETA</b>
+              <strong>
+                {route
+                  ? `${formatDistance(route.distanceKm)} • ${formatEta(route.durationMin)}`
+                  : "—"}
               </strong>
             </div>
 
@@ -342,138 +381,9 @@ function formatAge(ms: number) {
   return `${Math.round(h / 24)} days ago`;
 }
 
-/**
- * Leaflet map that moves the marker smoothly instead of reloading
- * the whole map every second.
- */
-function LiveMap({
-  points,
-  viewer
-}: {
-  points: GeoPoint[];
-  viewer: Viewer | null;
-}) {
-  const el = useRef<HTMLDivElement | null>(null);
-  const L = useRef<any>(null);
-  const map = useRef<any>(null);
-  const marker = useRef<any>(null);
-  const circle = useRef<any>(null);
-  const trail = useRef<any>(null);
-  const me = useRef<any>(null);
-  const followed = useRef(false);
-  const [ready, setReady] = useState(false);
-
-  useEffect(() => {
-    let disposed = false;
-
-    import("leaflet").then((mod) => {
-      if (disposed || !el.current || map.current) return;
-
-      const leaflet = (mod as any).default || mod;
-      L.current = leaflet;
-
-      map.current = leaflet
-        .map(el.current, { zoomControl: true })
-        .setView([20, 78], 4);
-
-      leaflet
-        .tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
-          maxZoom: 19,
-          attribution: "&copy; OpenStreetMap contributors"
-        })
-        .addTo(map.current);
-
-      setReady(true);
-    });
-
-    return () => {
-      disposed = true;
-      map.current?.remove();
-      map.current = null;
-    };
-  }, []);
-
-  const latest = points[0];
-
-  useEffect(() => {
-    if (!ready || !latest) return;
-
-    const leaflet = L.current;
-    const pos: [number, number] = [latest.latitude, latest.longitude];
-
-    if (!marker.current) {
-      marker.current = leaflet
-        .circleMarker(pos, {
-          radius: 9,
-          color: "#ffffff",
-          weight: 3,
-          fillColor: "#1d6ff2",
-          fillOpacity: 1
-        })
-        .addTo(map.current);
-
-      circle.current = leaflet
-        .circle(pos, {
-          radius: latest.accuracy_m || 0,
-          color: "#1d6ff2",
-          weight: 1,
-          fillOpacity: 0.1
-        })
-        .addTo(map.current);
-
-      trail.current = leaflet
-        .polyline([], { color: "#1d6ff2", weight: 4, opacity: 0.6 })
-        .addTo(map.current);
-    }
-
-    marker.current.setLatLng(pos);
-    circle.current.setLatLng(pos);
-    circle.current.setRadius(latest.accuracy_m || 0);
-    trail.current.setLatLngs(
-      [...points].reverse().map((p) => [p.latitude, p.longitude])
-    );
-
-    if (!followed.current) {
-      map.current.setView(pos, 17);
-      followed.current = true;
-    } else if (!map.current.getBounds().pad(-0.2).contains(pos)) {
-      // Keep the tracked phone in view as it moves.
-      map.current.panTo(pos);
-    }
-  }, [ready, latest?.latitude, latest?.longitude, latest?.accuracy_m, points]);
-
-  useEffect(() => {
-    if (!ready || !viewer) return;
-
-    const leaflet = L.current;
-    const pos: [number, number] = [viewer.lat, viewer.lon];
-
-    if (!me.current) {
-      me.current = leaflet
-        .circleMarker(pos, {
-          radius: 7,
-          color: "#ffffff",
-          weight: 3,
-          fillColor: "#18a058",
-          fillOpacity: 1
-        })
-        .bindTooltip("You")
-        .addTo(map.current);
-    } else {
-      me.current.setLatLng(pos);
-    }
-  }, [ready, viewer?.lat, viewer?.lon]);
-
-  return (
-    <div style={{ position: "relative" }}>
-      <div ref={el} className="map" />
-      {!latest && (
-        <div className="map-overlay">Waiting for location...</div>
-      )}
-      <div className="legend">
-        <span><i style={{ background: "#1d6ff2" }} /> Tracked phone</span>
-        <span><i style={{ background: "#18a058" }} /> You</span>
-      </div>
-    </div>
-  );
+function formatEta(min: number) {
+  if (min < 1) return "< 1 min";
+  if (min < 60) return `${Math.round(min)} min`;
+  const h = Math.floor(min / 60);
+  return `${h} h ${Math.round(min - h * 60)} min`;
 }

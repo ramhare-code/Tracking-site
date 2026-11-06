@@ -1,6 +1,9 @@
 // Sends the permission link to the recipient automatically.
-// Email uses Resend, SMS uses Twilio. Each channel is optional:
-// it is only used when its environment variables are set.
+// Email: Gmail / any SMTP account (GMAIL_USER + GMAIL_APP_PASSWORD, or
+// SMTP_*), or Resend. SMS: Twilio. Each channel is used only when its
+// environment variables are set.
+
+import nodemailer from "nodemailer";
 
 export type ChannelResult = {
   channel: "email" | "sms";
@@ -13,12 +16,16 @@ function buildMessage(name: string, inviteUrl: string) {
     subject: "Location sharing request",
     text:
       `Hi ${name}, you have been asked to share your live location. ` +
+      `Once you approve, your location will always be shown on the ` +
+      `requester's live map until you press Stop Sharing. ` +
       `Open this link to agree or decline: ${inviteUrl}`,
     html:
       `<p>Hi ${escapeHtml(name)},</p>` +
       `<p>You have been asked to share your live location.</p>` +
       `<p><a href="${inviteUrl}">Open the permission page</a> to agree or decline.</p>` +
-      `<p>You can stop sharing at any time from the same page.</p>`
+      `<p><b>Once you approve, your location will always be shown</b> on the requester's live map ` +
+      `(updated every second while the page is open, last known location otherwise) ` +
+      `until you press <b>Stop Sharing</b> on the same page.</p>`
   };
 }
 
@@ -28,16 +35,63 @@ function escapeHtml(value: string) {
   );
 }
 
+async function sendSmtp(
+  to: string,
+  name: string,
+  inviteUrl: string
+): Promise<ChannelResult | null> {
+  const user = process.env.SMTP_USER || process.env.GMAIL_USER;
+  const pass = process.env.SMTP_PASSWORD || process.env.GMAIL_APP_PASSWORD;
+
+  if (!user || !pass) return null;
+
+  const msg = buildMessage(name, inviteUrl);
+
+  try {
+    const transport = nodemailer.createTransport({
+      host: process.env.SMTP_HOST || "smtp.gmail.com",
+      port: Number(process.env.SMTP_PORT || 465),
+      secure: Number(process.env.SMTP_PORT || 465) === 465,
+      auth: { user, pass }
+    });
+
+    await transport.sendMail({
+      from: process.env.SMTP_FROM || `Location Request <${user}>`,
+      to,
+      subject: msg.subject,
+      text: msg.text,
+      html: msg.html
+    });
+
+    return { channel: "email", sent: true, detail: `Email sent to ${to}` };
+  } catch (error) {
+    console.error("SMTP error", error);
+    return {
+      channel: "email",
+      sent: false,
+      detail: "Email could not be sent (check Gmail app password)"
+    };
+  }
+}
+
 async function sendEmail(
   to: string,
   name: string,
   inviteUrl: string
 ): Promise<ChannelResult> {
+  const smtp = await sendSmtp(to, name, inviteUrl);
+  if (smtp) return smtp;
+
   const key = process.env.RESEND_API_KEY;
   const from = process.env.RESEND_FROM_EMAIL;
 
   if (!key || !from) {
-    return { channel: "email", sent: false, detail: "Email not configured" };
+    return {
+      channel: "email",
+      sent: false,
+      detail:
+        "Email not set up yet: add GMAIL_USER and GMAIL_APP_PASSWORD in your hosting settings"
+    };
   }
 
   const msg = buildMessage(name, inviteUrl);
